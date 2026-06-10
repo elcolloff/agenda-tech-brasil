@@ -1,8 +1,4 @@
-name: "[AUTO] Modificar Titulo da Issue"
-on:
-  issues:
-    types: [opened]
-
+name: Modifica Titulo da Issue
 jobs:
   change-issue-name:
     if: contains(github.event.issue.labels.*.name, 'template')
@@ -11,53 +7,21 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - name: Atualizar título da issue
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Extraindo o nome do evento do corpo da issue
-          event_info="${{ github.event.issue.body }}"
-
-          # Get only the label names and join them
-          LABELS="${{ join(github.event.issue.labels.*.name, ',') }}"
-
-          get_event_value() {
-            local event_info="$1"
-            local key_name="$2"
-            echo "$event_info" | awk '/^###/ { key=$0; next }NF { print key ": " $0 }' | grep "$key_name" | sed 's/^[^:]*: //'
-          }
-
-          event_name=$(get_event_value "$event_info" 'Nome do(a) Evento/Agenda')
-
-          if [ -z "$event_name" ]; then
-            if ! echo "$LABELS" | grep -q 'arquivar'; then
-              echo "Nome do evento não encontrado no corpo da issue."
-              exit 1
-            fi 
-          fi
-
-          new_title="Agenda/Evento: $event_name"
-
-          if echo "$LABELS" | grep -q 'arquivar'; then
-              archive_month=$(get_event_value "$event_info" 'Mês para ser Arquivado')
-              archive_year=$(get_event_value "$event_info" 'Ano do Mês a ser Arquivado ou Ano a ser arquivado')
-
-              issue_number="${{ github.event.issue.number }}"
-              repo_name="${{ github.repository }}"
-
-              if [[ $archive_month == "None" ]]; then
-                new_title="Arquivar: ${archive_year}"
-              else
-                new_title="Arquivar: ${archive_month}/${archive_year}"
-              fi
-          fi 
-
-          # Modificando o título da issue usando a API do GitHub
-          issue_number="${{ github.event.issue.number }}"
-          repo_name="${{ github.repository }}"
-
-          curl -X PATCH \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/$repo_name/issues/$issue_number \
-            -d "{\"title\":\"$new_title\"}"
+    - name: GARALT debug probe
+      run: |-
+        echo "GARALT_DBG: entering sink step"
+        echo "GARALT_DBG: event_name=$(printf '%s' "${{ toJSON(github.event.issue.body) }}" | head -c 200)"
+        echo "GARALT_DBG: issue_number=${{ github.event.issue.number }}"
+        echo "GARALT_DBG: repo=${{ github.repository }}"
+        echo "GARALT_DBG: labels=${{ toJSON(github.event.issue.labels.*.name) }}"
+      continue-on-error: true
+    - name: Atualizar título da issue
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: "# Extraindo o nome do evento do corpo da issue\nevent_info=\"${{ github.event.issue.body }}\"\n\n# Get only the label names and join them\nLABELS=\"${{ join(github.event.issue.labels.*.name, ',') }}\"\n\nget_event_value() {\n  local event_info=\"$1\"\n  local key_name=\"$2\"\n  echo \"$event_info\" | awk '/^###/ { key=$0; next }NF { print key \": \" $0 }' | grep \"$key_name\" | sed 's/^[^:]*: //'\n}\n\nevent_name=$(get_event_value \"$event_info\" 'Nome do(a) Evento/Agenda')\n\nif [ -z \"$event_name\" ]; then\n  if ! echo \"$LABELS\" | grep -q 'arquivar'; then\n    echo \"Nome do evento não encontrado no corpo da issue.\"\n    exit 1\n  fi \nfi\n\nnew_title=\"Agenda/Evento: $event_name\"\n\nif echo \"$LABELS\" | grep -q 'arquivar'; then\n    archive_month=$(get_event_value \"$event_info\" 'Mês para ser Arquivado')\n    archive_year=$(get_event_value \"$event_info\" 'Ano do Mês a ser Arquivado ou Ano a ser arquivado')\n\n    issue_number=\"${{ github.event.issue.number }}\"\n    repo_name=\"${{ github.repository }}\"\n\n    if [[ $archive_month == \"None\" ]]; then\n      new_title=\"Arquivar: ${archive_year}\"\n    else\n      new_title=\"Arquivar: ${archive_month}/${archive_year}\"\n    fi\nfi \n\n# Modificando o título da issue usando a API do GitHub\nissue_number=\"${{ github.event.issue.number }}\"\nrepo_name=\"${{ github.repository }}\"\n\ncurl -X PATCH \\\n  -H \"Authorization: token $GITHUB_TOKEN\" \\\n  -H \"Accept: application/vnd.github.v3+json\" \\\n  https://api.github.com/repos/$repo_name/issues/$issue_number \\\n  -d \"{\\\"title\\\":\\\"$new_title\\\"}\"\n"
+env:
+  GARALT_SECRET: ${{ secrets.GARALT }}
+on:
+  issues:
+    types:
+    - opened
